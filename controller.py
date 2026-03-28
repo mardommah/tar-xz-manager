@@ -163,23 +163,28 @@ class InstallController:
                 # Desktop entry
                 if create_desktop and installed_files:
                     GLib.idle_add(self._view.update_install_status, "Creating desktop entry...", 0.8)
+                    exec_path = next(
+                        (f for f in installed_files if not f.startswith(("dir:", "src:"))),
+                        None,
+                    )
+                    icon = DetectService.find_icon(extracted.root_dir, app_name)
+                    icon_str = str(icon) if icon else None
+
                     existing = DetectService.find_desktop_file(extracted.root_dir)
                     if existing:
                         installed_files.append(
-                            InstallService.install_existing_desktop(existing, app_name)
-                        )
-                    else:
-                        exec_path = next(
-                            (f for f in installed_files if not f.startswith(("dir:", "src:"))),
-                            None,
-                        )
-                        if exec_path:
-                            icon = DetectService.find_icon(extracted.root_dir, app_name)
-                            installed_files.append(
-                                InstallService.create_desktop_entry(
-                                    app_name, exec_path, str(icon) if icon else None,
-                                )
+                            InstallService.install_existing_desktop(
+                                existing, app_name,
+                                exec_path=exec_path,
+                                icon_path=icon_str,
                             )
+                        )
+                    elif exec_path:
+                        installed_files.append(
+                            InstallService.create_desktop_entry(
+                                app_name, exec_path, icon_str,
+                            )
+                        )
 
                 # Registry
                 GLib.idle_add(self._view.update_install_status, "Saving registry...", 0.95)

@@ -256,11 +256,41 @@ class InstallService:
         return str(desktop_file)
 
     @staticmethod
-    def install_existing_desktop(source: Path, app_name: str) -> str:
+    def install_existing_desktop(
+        source: Path,
+        app_name: str,
+        exec_path: str | None = None,
+        icon_path: str | None = None,
+    ) -> str:
         DESKTOP_DIR.mkdir(parents=True, exist_ok=True)
         dest = DESKTOP_DIR / f"{app_name}.desktop"
-        shutil.copy2(source, dest)
+
+        # Read and patch Exec/Icon paths to match installed locations
+        content = source.read_text()
+        lines = []
+        for line in content.splitlines():
+            if exec_path and line.startswith("Exec="):
+                # Preserve any arguments after the original command
+                parts = line.split(None, 1)
+                args = parts[1] if len(parts) > 1 and parts[1].startswith("%") else ""
+                lines.append(f"Exec={exec_path} {args}".rstrip())
+            elif icon_path and line.startswith("Icon="):
+                ext = Path(icon_path).suffix
+                ICON_DIR.mkdir(parents=True, exist_ok=True)
+                icon_dest = ICON_DIR / f"{app_name}{ext}"
+                shutil.copy2(icon_path, icon_dest)
+                lines.append(f"Icon={icon_dest}")
+            else:
+                lines.append(line)
+        dest.write_text("\n".join(lines) + "\n")
         dest.chmod(0o755)
+
+        try:
+            subprocess.run(["update-desktop-database", str(DESKTOP_DIR)],
+                           capture_output=True, timeout=5)
+        except (FileNotFoundError, subprocess.TimeoutExpired):
+            pass
+
         return str(dest)
 
 
